@@ -3,32 +3,7 @@ import axios from 'axios';
 
 const API_BASE_URL = 'https://pharma-ai-backend-no4v.onrender.com/api/v1';
 
-
-export const submitComplaint = createAsyncThunk(
-  'complaints/submitComplaint',
-  async (complaintData, { rejectWithValue }) => {
-    try {
-      const response = await fetch('http://localhost:8000/api/v1/complaints/ingest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(complaintData),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-       
-        return rejectWithValue(data.detail || 'Failed to submit complaint');
-      }
-
-      return data;
-    } catch (err) {
-      return rejectWithValue(err.message || 'Network error');
-    }
-  }
-);
-
-
+// Placeholder for fetchComplaints (Ensure this exists in your store or import it)
 export const fetchComplaints = createAsyncThunk(
   'complaints/fetch',
   async (_, { rejectWithValue }) => {
@@ -36,12 +11,34 @@ export const fetchComplaints = createAsyncThunk(
       const response = await axios.get(`${API_BASE_URL}/complaints`);
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
+      return rejectWithValue(error.response?.data?.detail || error.message);
     }
   }
 );
 
+// Action 1: Submit new complaint
+export const submitComplaint = createAsyncThunk(
+  'complaints/submit',
+  async (formData, { dispatch, rejectWithValue }) => {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/complaints/process`,
+        formData
+      );
+      
+      // Refresh complaints list after successful submission
+      dispatch(fetchComplaints());
+      
+      return response.data;
+    } catch (error) {
+      // Return FastAPI string detail or standard error message on failure
+      const errorMessage = error.response?.data?.detail || error.message;
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
 
+// Complaints Slice
 const complaintsSlice = createSlice({
   name: 'complaints',
   initialState: {
@@ -52,20 +49,7 @@ const complaintsSlice = createSlice({
   reducers: {},
   extraReducers: (builder) => {
     builder
-      
-      .addCase(fetchComplaints.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchComplaints.fulfilled, (state, action) => {
-        state.loading = false;
-        state.items = action.payload;
-      })
-      .addCase(fetchComplaints.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      
+      // Submit Complaint Handlers
       .addCase(submitComplaint.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -76,10 +60,23 @@ const complaintsSlice = createSlice({
       .addCase(submitComplaint.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      // Fetch Complaints Handlers
+      .addCase(fetchComplaints.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(fetchComplaints.fulfilled, (state, action) => {
+        state.loading = false;
+        state.items = action.payload;
+      })
+      .addCase(fetchComplaints.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });
 
+// Configure Store
 export const store = configureStore({
   reducer: {
     complaints: complaintsSlice.reducer,
