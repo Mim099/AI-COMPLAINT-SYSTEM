@@ -7,7 +7,8 @@ export const submitComplaint = createAsyncThunk(
   'complaints/submit',
   async (formData, { dispatch }) => {
     // UPDATED TO 127.0.0.1
-    const response = await axios.post('https://pharma-ai-backend-no4v.onrender.com', formData);
+    const response = await // Include the full endpoint path!
+axios.post('https://pharma-ai-backend-no4v.onrender.com/api/v1/complaints/process', formData);
     dispatch(fetchComplaints());
     return response.data;
   }
