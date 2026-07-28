@@ -1,199 +1,188 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { submitComplaint, fetchComplaints } from './store';
+import { submitComplaint, fetchComplaints } from './store'; // Adjust path to './redux/store' if store.js is inside src/redux/
 
-function App() {
+// 1. Separate Child Component for Form Submission
+function ComplaintForm() {
+  const [productName, setProductName] = useState('');
+  const [batchNumber, setBatchNumber] = useState('');
+  const [description, setDescription] = useState('');
+
   const dispatch = useDispatch();
-  const { result, history, loading, historyLoading, error } = useSelector((state) => state.complaints);
-
-  const [form, setForm] = useState({
-    product_name: '',
-    batch_number: '',
-    description: ''
-  });
-
-  // Fetch past complaints when component mounts
-  useEffect(() => {
-    dispatch(fetchComplaints());
-  }, [dispatch]);
+  const { loading, error } = useSelector((state) => state.complaints || {});
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    dispatch(submitComplaint(form));
+    if (!description.trim() || !batchNumber.trim()) return;
+
+    dispatch(
+      submitComplaint({
+        product_name: productName,
+        batch_number: batchNumber,
+        description: description,
+      })
+    );
+
+    // Reset input fields
+    setProductName('');
+    setBatchNumber('');
+    setDescription('');
   };
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '40px auto', padding: '24px', fontFamily: "'Inter', sans-serif" }}>
-      <header style={{ marginBottom: '24px', borderBottom: '1px solid #e5e7eb', paddingBottom: '16px' }}>
-        <h1 style={{ color: '#111827', margin: 0, fontSize: '24px', fontWeight: '700' }}>Pharma AI Complaint Management Portal</h1>
-        <p style={{ color: '#6b7280', marginTop: '4px', fontSize: '14px' }}>Automated Triage & 5-Whys Root Cause Analysis powered by LangGraph & Groq</p>
-      </header>
-
-      {/* Top Section: Intake Form + AI Result Output */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '40px' }}>
-        {/* Form Panel */}
-        <form onSubmit={handleSubmit} style={{ background: '#ffffff', padding: '24px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: '600', marginTop: 0, marginBottom: '16px' }}>Log New Product Defect</h2>
-          
-          <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: '500' }}>Product Name</label>
+    <div style={{ background: '#ffffff', padding: '24px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+      <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>Ingest Pharma Complaint</h2>
+      <form onSubmit={handleSubmit}>
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
+            Product Name
+          </label>
           <input
-            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', marginBottom: '16px', boxSizing: 'border-box' }}
+            type="text"
+            placeholder="e.g., Amoxicillin 500mg"
+            value={productName}
+            onChange={(e) => setProductName(e.target.value)}
+            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontFamily: 'Inter, sans-serif' }}
             required
-            placeholder="e.g., Amoxicillin 500mg Oral Suspension"
-            value={form.product_name}
-            onChange={(e) => setForm({ ...form, product_name: e.target.value })}
           />
-
-          <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: '500' }}>Batch / Lot Number</label>
-          <input
-            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', marginBottom: '16px', boxSizing: 'border-box' }}
-            required
-            placeholder="e.g., BATCH-2026-X99"
-            value={form.batch_number}
-            onChange={(e) => setForm({ ...form, batch_number: e.target.value })}
-          />
-
-          <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: '500' }}>Complaint Description</label>
-          <textarea
-            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db', marginBottom: '16px', boxSizing: 'border-box' }}
-            rows="4"
-            required
-            placeholder="Describe defect, discoloration, seal failure, or particles observed..."
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-          />
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '12px',
-              backgroundColor: '#2563eb',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '6px',
-              fontWeight: '600',
-              cursor: loading ? 'not-allowed' : 'pointer'
-            }}
-          >
-            {loading ? 'AI Pipeline Executing...' : 'Run AI Investigation'}
-          </button>
-          {error && <p style={{ color: '#dc2626', fontSize: '14px', marginTop: '12px' }}>{error}</p>}
-        </form>
-
-        {/* Output Panel */}
-        <div style={{ background: '#ffffff', padding: '24px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: '600', marginTop: 0, marginBottom: '16px' }}>AI Investigation Report</h2>
-          
-          {!result && !loading && (
-            <p style={{ color: '#9ca3af', fontSize: '14px' }}>Fill out the defect form on the left to trigger the LangGraph orchestration engine.</p>
-          )}
-
-          {loading && <p style={{ color: '#2563eb', fontSize: '14px', fontWeight: '500' }}>⚡ Processing with gemma2-9b-it & llama-3.3-70b-versatile...</p>}
-
-          {result && (
-            <div>
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Complaint ID</span>
-                <p style={{ margin: '2px 0 0', fontWeight: '600', color: '#111827' }}>{result.complaint_number}</p>
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Risk Level</span>
-                <div>
-                  <span style={{
-                    display: 'inline-block',
-                    padding: '2px 10px',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    marginTop: '4px',
-                    backgroundColor: result.severity === 'Critical' ? '#fee2e2' : '#fef3c7',
-                    color: result.severity === 'Critical' ? '#991b1b' : '#92400e'
-                  }}>
-                    {result.severity}
-                  </span>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Summary</span>
-                <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#374151' }}>{result.summary}</p>
-              </div>
-
-              <div>
-                <span style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Root Cause Analysis (5 Whys)</span>
-                <pre style={{
-                  background: '#f9fafb',
-                  border: '1px solid #f3f4f6',
-                  padding: '12px',
-                  borderRadius: '6px',
-                  whiteSpace: 'pre-wrap',
-                  fontSize: '12px',
-                  color: '#1f2937',
-                  marginTop: '6px',
-                  maxHeight: '220px',
-                  overflowY: 'auto'
-                }}>
-                  {result.root_cause}
-                </pre>
-              </div>
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* Bottom Section: Complaint History Dashboard Table */}
-      <section style={{ background: '#ffffff', padding: '24px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-        <h2 style={{ fontSize: '18px', fontWeight: '600', marginTop: 0, marginBottom: '16px', color: '#111827' }}>Logged Complaints History</h2>
-        
-        {historyLoading && <p style={{ fontSize: '14px', color: '#6b7280' }}>Loading database records...</p>}
-        
-        {!historyLoading && history.length === 0 && (
-          <p style={{ fontSize: '14px', color: '#9ca3af' }}>No complaints stored in database yet.</p>
-        )}
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
+            Batch Number
+          </label>
+          <input
+            type="text"
+            placeholder="e.g., B2026-AMX-09"
+            value={batchNumber}
+            onChange={(e) => setBatchNumber(e.target.value)}
+            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontFamily: 'Inter, sans-serif' }}
+            required
+          />
+        </div>
 
-        {!historyLoading && history.length > 0 && (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #e5e7eb', color: '#4b5563' }}>
-                  <th style={{ padding: '10px' }}>Complaint ID</th>
-                  <th style={{ padding: '10px' }}>Product</th>
-                  <th style={{ padding: '10px' }}>Batch</th>
-                  <th style={{ padding: '10px' }}>Severity</th>
-                  <th style={{ padding: '10px' }}>AI Summary</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((item) => (
-                  <tr key={item.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '12px 10px', fontWeight: '600', color: '#2563eb' }}>{item.complaint_number}</td>
-                    <td style={{ padding: '12px 10px', color: '#111827' }}>{item.product_name}</td>
-                    <td style={{ padding: '12px 10px', color: '#4b5563' }}>{item.batch_number}</td>
-                    <td style={{ padding: '12px 10px' }}>
-                      <span style={{
-                        padding: '2px 8px',
-                        borderRadius: '10px',
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        backgroundColor: item.severity === 'Critical' ? '#fee2e2' : '#fef3c7',
-                        color: item.severity === 'Critical' ? '#991b1b' : '#92400e'
-                      }}>
-                        {item.severity}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 10px', color: '#4b5563', maxWidth: '300px' }}>{item.ai_summary}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>
+            Complaint Details
+          </label>
+          <textarea
+            rows={4}
+            placeholder="Describe product defect, packaging damage, or adverse event..."
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontFamily: 'Inter, sans-serif' }}
+            required
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          style={{
+            width: '100%',
+            padding: '12px',
+            backgroundColor: loading ? '#94a3b8' : '#0284c7',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '6px',
+            fontWeight: 600,
+            cursor: loading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {loading ? 'Processing via LangGraph...' : 'Analyze & Classify Complaint'}
+        </button>
+
+        {error && <p style={{ color: '#ef4444', fontSize: '14px', marginTop: '12px' }}>{error}</p>}
+      </form>
     </div>
   );
 }
 
-export default App;
+// 2. Separate Child Component for Results Display
+function AnalysisDisplay() {
+  const { activeAnalysis } = useSelector((state) => state.complaints || {});
+
+  return (
+    <div style={{ background: '#ffffff', padding: '24px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+      <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>AI Triage & RCA Output</h2>
+      {!activeAnalysis ? (
+        <div style={{ color: '#94a3b8', textAlign: 'center', marginTop: '60px' }}>
+          Submit a complaint to trigger Gemma-2 & Llama-3.3 LangGraph multi-agent analysis.
+        </div>
+      ) : (
+        <div>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            <span
+              style={{
+                padding: '4px 12px',
+                borderRadius: '20px',
+                fontSize: '12px',
+                fontWeight: 600,
+                backgroundColor: activeAnalysis.severity === 'Critical' ? '#fee2e2' : '#fef3c7',
+                color: activeAnalysis.severity === 'Critical' ? '#dc2626' : '#d97706',
+              }}
+            >
+              {activeAnalysis.severity || 'Unassigned'} Severity
+            </span>
+            <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, backgroundColor: '#e0f2fe', color: '#0369a1' }}>
+              Category: {activeAnalysis.defect_category || 'General'}
+            </span>
+          </div>
+
+          {activeAnalysis.requires_field_alert && (
+            <div style={{ padding: '12px', backgroundColor: '#fef2f2', borderLeft: '4px solid #ef4444', marginBottom: '16px', color: '#991b1b', fontSize: '13px' }}>
+              <strong>⚠️ Regulatory Alert Triggered:</strong> Immediate QA Notification & FDA 15-Day Alert Assessment Required.
+            </div>
+          )}
+
+          <div style={{ marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Root Cause Analysis (RCA Hypothesis)</h3>
+            <p style={{ fontSize: '13px', color: '#475569', lineHeight: '1.5', whiteSpace: 'pre-line' }}>
+              {activeAnalysis.root_cause_hypothesis || 'Analysis pending...'}
+            </p>
+          </div>
+
+          {activeAnalysis.capa_recommendations && (
+            <div>
+              <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Recommended CAPA Actions</h3>
+              <ul style={{ fontSize: '13px', color: '#475569', paddingLeft: '20px' }}>
+                {activeAnalysis.capa_recommendations.map((rec, i) => (
+                  <li key={i}>{rec}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 3. Main App Container
+export default function App() {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    if (typeof fetchComplaints === 'function') {
+      dispatch(fetchComplaints());
+    }
+  }, [dispatch]);
+
+  return (
+    <div style={{ maxWidth: '1000px', margin: '40px auto', padding: '0 20px', fontFamily: 'Inter, sans-serif' }}>
+      <header style={{ marginBottom: '32px' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#0f172a' }}>
+          Pharma Complaint Management System
+        </h1>
+        <p style={{ color: '#64748b', fontSize: '15px' }}>
+          Automated GXP Complaint Triage & CAPA Generation (Groq / LangGraph)
+        </p>
+      </header>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        <ComplaintForm />
+        <AnalysisDisplay />
+      </div>
+    </div>
+  );
+}
