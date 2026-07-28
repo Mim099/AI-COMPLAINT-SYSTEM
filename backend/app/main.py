@@ -9,7 +9,8 @@ from typing import List, Optional
 from app.database import engine, Base, get_db
 # Assuming your models, schemas, and langgraph flow are defined in your app module:
 from app.models import Complaint
-from app.graph import run_investigation_graph
+# NEW (Line 12):
+from app.services.ai_agent import run_investigation_graph
 
 # Initialize database tables
 Base.metadata.create_all(bind=engine)
