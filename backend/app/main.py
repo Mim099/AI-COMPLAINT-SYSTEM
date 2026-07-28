@@ -1,17 +1,55 @@
 import os
+from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import List, Optional
 
 # Local database & model imports
 from app.database import engine, Base, get_db
 from app.models import Complaint
-
-# Dynamically load the AI agent function from app.services.ai_agent
 import app.services.ai_agent as ai_agent_module
 
+# Initialize database tables
+Base.metadata.create_all(bind=engine)
+
+# Single FastAPI instance definition
+app = FastAPI(
+    title="Pharma AI Complaint Management API",
+    description="Backend service powered by FastAPI, LangGraph, and Groq",
+    version="1.0.0"
+)
+
+# Enable CORS for Vercel / External Frontend Access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- Pydantic Schemas ---
+class ComplaintCreate(BaseModel):
+    product_name: str
+    batch_number: str
+    description: str
+
+class ComplaintResponse(BaseModel):
+    id: int
+    product_name: str
+    batch_number: str
+    description: str
+    severity: Optional[str] = None
+    root_cause: Optional[str] = None
+    action_plan: Optional[str] = None
+    status: Optional[str] = "Processed"
+
+    class Config:
+        from_attributes = True
+
+
+# --- Helper Function ---
 def execute_ai_agent(product_name: str, batch_number: str, description: str):
     """Dynamically locates and executes the AI function inside app/services/ai_agent.py"""
     possible_func_names = [
@@ -39,44 +77,8 @@ def execute_ai_agent(product_name: str, batch_number: str, description: str):
         "action_plan": "Batch quarantined pending manual QA validation."
     }
 
-# Initialize database tables
-Base.metadata.create_all(bind=engine)
 
-app = FastAPI(
-    title="Pharma AI Complaint Management API",
-    description="Backend service powered by FastAPI, LangGraph, and Groq",
-    version="1.0.0"
-)
-
-# Enable CORS for Vercel / External Frontend Access
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Pydantic Schemas
-class ComplaintCreate(BaseModel):
-    product_name: str
-    batch_number: str
-    description: str
-
-class ComplaintResponse(BaseModel):
-    id: int
-    product_name: str
-    batch_number: str
-    description: str
-    severity: Optional[str] = None
-    root_cause: Optional[str] = None
-    action_plan: Optional[str] = None
-    status: Optional[str] = "Processed"
-
-    class Config:
-        from_attributes = True
-
-
+# --- API Routes ---
 @app.get("/")
 def read_root():
     return {"message": "Pharma AI Complaint System Backend is Live!"}
@@ -133,6 +135,9 @@ def process_complaint(payload: ComplaintCreate, db: Session = Depends(get_db)):
 
     except Exception as e:
         db.rollback()
+        import traceback
+        print(f"🔥 BACKEND ERROR: {str(e)}")
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process complaint: {str(e)}"
