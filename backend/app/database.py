@@ -1,28 +1,29 @@
 import os
-import urllib.parse
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
-from dotenv import load_dotenv
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-load_dotenv()
+# Fetch database URL from Render environment variables
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Read environment variables
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "ai_complaint_system")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
+if DATABASE_URL:
+    # Render provides 'postgres://', but SQLAlchemy requires 'postgresql://'
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    
+    engine = create_engine(DATABASE_URL)
+else:
+    # Fallback to local SQLite file so the backend never crashes
+    DATABASE_URL = "sqlite:///./sql_app.db"
+    engine = create_engine(
+        DATABASE_URL, 
+        connect_args={"check_same_thread": False}
+    )
 
-# URL-encode the password so special characters like '@' don't break the connection string
-SAFE_PASSWORD = urllib.parse.quote_plus(DB_PASSWORD)
-
-# Build connection URL
-DATABASE_URL = f"postgresql://{DB_USER}:{SAFE_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-
-engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 Base = declarative_base()
 
+# Dependency to get DB session in FastAPI endpoints
 def get_db():
     db = SessionLocal()
     try:
