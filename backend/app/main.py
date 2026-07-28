@@ -1,79 +1,108 @@
-from fastapi import FastAPI, Depends, HTTPException
+import os
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from datetime import datetime
-from typing import List
+from pydantic import BaseModel
+from typing import List, Optional
 
-from app.database import Base, engine, get_db
+# Local imports
+from app.database import engine, Base, get_db
+# Assuming your models, schemas, and langgraph flow are defined in your app module:
 from app.models import Complaint
-from app.schemas import ComplaintCreate, ComplaintResponse
-from app.services.ai_agent import complaint_ai_workflow
+from app.graph import run_investigation_graph
 
-app = FastAPI(title="AI Complaint Management API")
+# Initialize database tables
+Base.metadata.create_all(bind=engine)
 
-# Enable CORS for React frontend (allowing both localhost and 127.0.0.1)
+app = FastAPI(
+    title="Pharma AI Complaint Management API",
+    description="Backend service powered by FastAPI, LangGraph, and Groq",
+    version="1.0.0"
+)
+
+# Enable CORS for Vercel / External Frontend Access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"],  # Allows requests from Vercel deployment and local testing
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Auto-create DB tables
-Base.metadata.create_all(bind=engine)
+# Pydantic Schemas for Request / Response
+class ComplaintCreate(BaseModel):
+    product_name: str
+    batch_number: str
+    description: str
+
+class ComplaintResponse(BaseModel):
+    id: int
+    product_name: str
+    batch_number: str
+    description: str
+    severity: Optional[str] = None
+    root_cause: Optional[str] = None
+    action_plan: Optional[str] = None
+    status: Optional[str] = "Processed"
+
+    class Config:
+        from_attributes = True
+
 
 @app.get("/")
-def home():
-    return {"message": "Backend Running Successfully 🚀"}
+def read_root():
+    return {"message": "Pharma AI Complaint System Backend is Live!"}
 
-# Endpoint 1: Process new complaint using AI & save to DB
-@app.post("/api/v1/complaints/process", response_model=ComplaintResponse)
-def process_complaint(data: ComplaintCreate, db: Session = Depends(get_db)):
+
+@app.get("/api/v1/complaints", response_model=List[ComplaintResponse])
+def get_all_complaints(db: Session = Depends(get_db)):
+    """Fetch all logged complaint records from database"""
     try:
-        # 1. Run AI LangGraph Workflow
-        ai_result = complaint_ai_workflow.invoke({
-            "product_name": data.product_name,
-            "description": data.description,
-            "severity": "",
-            "summary": "",
-            "root_cause": ""
-        })
-
-        complaint_no = f"CMP-2026-{int(datetime.now().timestamp())}"
-
-        # 2. Save into DB
-        db_complaint = Complaint(
-            complaint_number=complaint_no,
-            product_name=data.product_name,
-            batch_number=data.batch_number,
-            description=data.description,
-            severity=ai_result.get("severity"),
-            ai_summary=ai_result.get("summary"),
-            root_cause=ai_result.get("root_cause")
+        complaints = db.query(Complaint).order_by(Complaint.id.desc()).all()
+        return complaints
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}"
         )
-        db.add(db_complaint)
-        db.commit()
-        db.refresh(db_complaint)
 
-        # 3. Return response
-        return {
-            "status": "success",
-            "complaint_number": complaint_no,
-            "summary": ai_result.get("summary"),
-            "severity": ai_result.get("severity"),
-            "root_cause": ai_result.get("root_cause")
-        }
+
+@app.post("/api/v1/complaints/process", response_model=ComplaintResponse)
+def process_complaint(payload: ComplaintCreate, db: Session = Depends(get_db)):
+    """Run AI investigation via LangGraph/Groq and save result to database"""
+    try:
+        # 1. Trigger AI Root Cause Analysis pipeline
+        ai_result = run_investigation_graph(
+            product_name=payload.product_name,
+            batch_number=payload.batch_number,
+            description=payload.description
+        )
+
+        # 2. Extract results from AI pipeline (with safe fallbacks)
+        severity = ai_result.get("severity", "Medium")
+        root_cause = ai_result.get("root_cause", "Investigation incomplete")
+        action_plan = ai_result.get("action_plan", "Pending QA Review")
+
+        # 3. Save entry to database
+        new_complaint = Complaint(
+            product_name=payload.product_name,
+            batch_number=payload.batch_number,
+            description=payload.description,
+            severity=severity,
+            root_cause=root_cause,
+            action_plan=action_plan,
+            status="Completed"
+        )
+        
+        db.add(new_complaint)
+        db.commit()
+        db.refresh(new_complaint)
+
+        return new_complaint
+
     except Exception as e:
         db.rollback()
-        print("\n" + "="*50)
-        print("REAL PYTHON ERROR CATCH:")
-        print(e)
-        print("="*50 + "\n")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Endpoint 2: Fetch all historical complaints for the React table
-@app.get("/api/v1/complaints")
-def get_all_complaints(db: Session = Depends(get_db)):
-    complaints = db.query(Complaint).order_by(Complaint.created_at.desc()).all()
-    return complaints
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process complaint: {str(e)}"
+        )
