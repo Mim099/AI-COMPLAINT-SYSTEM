@@ -7,7 +7,7 @@ export const submitComplaint = createAsyncThunk(
   'complaints/submit',
   async (formData, { dispatch }) => {
     // UPDATED TO 127.0.0.1
-    const response = await axios.post('http://127.0.0.1:8000/api/v1/complaints/process', formData);
+    const response = await axios.post('https://pharma-ai-backend-no4v.onrender.com', formData);
     dispatch(fetchComplaints());
     return response.data;
   }
@@ -18,7 +18,7 @@ export const fetchComplaints = createAsyncThunk(
   'complaints/fetchAll',
   async () => {
     // UPDATED TO 127.0.0.1
-    const response = await axios.get('http://127.0.0.1:8000/api/v1/complaints');
+    const response = await axios.get('https://pharma-ai-backend-no4v.onrender.com');
     return response.data;
   }
 );
