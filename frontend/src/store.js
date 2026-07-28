@@ -1,68 +1,89 @@
 import { configureStore, createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
+const API_BASE_URL = 'https://pharma-ai-backend-no4v.onrender.com/api/v1';
 
-// Action 1: Submit new complaint
+
 export const submitComplaint = createAsyncThunk(
-  'complaints/submit',
-  async (formData, { dispatch }) => {
-    // UPDATED TO 127.0.0.1
-    const response = await // Include the full endpoint path!
-axios.post('https://pharma-ai-backend-no4v.onrender.com/api/v1/complaints/process', formData);
-    dispatch(fetchComplaints());
-    return response.data;
+  'complaints/submitComplaint',
+  async (complaintData, { rejectWithValue }) => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/complaints/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(complaintData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+       
+        return rejectWithValue(data.detail || 'Failed to submit complaint');
+      }
+
+      return data;
+    } catch (err) {
+      return rejectWithValue(err.message || 'Network error');
+    }
   }
 );
 
-// Action 2: Fetch all past complaints from DB
+
 export const fetchComplaints = createAsyncThunk(
-  'complaints/fetchAll',
-  async () => {
-    // UPDATED TO 127.0.0.1
-    const response = await axios.get('https://pharma-ai-backend-no4v.onrender.com');
-    return response.data;
+  'complaints/fetch',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/complaints`);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || error.message);
+    }
   }
 );
 
-const complaintSlice = createSlice({
+
+const complaintsSlice = createSlice({
   name: 'complaints',
-  initialState: { 
-    result: null, 
-    history: [], 
-    loading: false, 
-    historyLoading: false, 
-    error: null 
+  initialState: {
+    items: [],
+    loading: false,
+    error: null,
   },
   reducers: {},
   extraReducers: (builder) => {
     builder
-      // Submit Complaint Handlers
+      
+      .addCase(fetchComplaints.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchComplaints.fulfilled, (state, action) => {
+        state.loading = false;
+        state.items = action.payload;
+      })
+      .addCase(fetchComplaints.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      
       .addCase(submitComplaint.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(submitComplaint.fulfilled, (state, action) => {
+      .addCase(submitComplaint.fulfilled, (state) => {
         state.loading = false;
-        state.result = action.payload;
       })
-      .addCase(submitComplaint.rejected, (state) => {
+      .addCase(submitComplaint.rejected, (state, action) => {
         state.loading = false;
-        state.error = 'Failed to analyze complaint. Ensure backend is running.';
-      })
-      // Fetch History Handlers
-      .addCase(fetchComplaints.pending, (state) => {
-        state.historyLoading = true;
-      })
-      .addCase(fetchComplaints.fulfilled, (state, action) => {
-        state.historyLoading = false;
-        state.history = action.payload;
-      })
-      .addCase(fetchComplaints.rejected, (state) => {
-        state.historyLoading = false;
+        state.error = action.payload;
       });
   },
 });
 
 export const store = configureStore({
-  reducer: { complaints: complaintSlice.reducer }
+  reducer: {
+    complaints: complaintsSlice.reducer,
+  },
 });
+
+export default store;
